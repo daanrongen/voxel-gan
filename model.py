@@ -73,6 +73,7 @@ class _3DGAN(object):
         self.gpu = args.gpu
         self.mode = args.mode
         self.restore = args.restore
+        self.snap = args.snap
 
         # init dataset and networks
         self.config = config
@@ -239,7 +240,7 @@ class _3DGAN(object):
             if self.step % 100 == 0:
                 self.save_log()
 
-            if self.step % 1000 == 0:
+            if self.step % self.snap == 0:
                 self.save_img()
                 self.save_model()
 

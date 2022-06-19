@@ -10,6 +10,9 @@ if __name__ == "__main__":
         "-a", "--attribute", type=str, help="Specify category for training."
     )
     parser.add_argument(
+        "-s", "--snap", type=int, default=100, help="Model save interval"
+    )
+    parser.add_argument(
         "-g", "--gpu", default=[], nargs="+", type=int, help="Specify GPU ids."
     )
     parser.add_argument(

@@ -1,1 +1,4 @@
 volumetric_data/
+output/
+predictions/
+models/

@@ -2,6 +2,24 @@ from visualisation.util import *
 import matplotlib.cm
 import vtk
 import math
+from vtkmodules.vtkCommonColor import vtkNamedColors
+from vtkmodules.vtkFiltersSources import vtkSphereSource
+from vtkmodules.vtkIOImage import (
+    vtkBMPWriter,
+    vtkJPEGWriter,
+    vtkPNGWriter,
+    vtkPNMWriter,
+    vtkPostScriptWriter,
+    vtkTIFFWriter
+)
+from vtkmodules.vtkRenderingCore import (
+    vtkActor,
+    vtkPolyDataMapper,
+    vtkRenderWindow,
+    vtkRenderWindowInteractor,
+    vtkRenderer,
+    vtkWindowToImageFilter
+)
 
 ############################################################################
 ### VTK functions
@@ -58,7 +76,7 @@ def block_generation(cen_size, color):
     cubeActor.GetProperty().SetSpecular(0.1)
     cubeActor.GetProperty().SetSpecularColor(1, 1, 1)
     cubeActor.GetProperty().SetDiffuseColor(color[:3])
-    # cubeActor.GetProperty().SetAmbientColor(1,1,1)
+    # cubeActor.GetProperty().SetAmbientColor(0, 0, 0)
     # cubeActor.GetProperty().ShadingOn()
     return cubeActor
 
@@ -104,21 +122,20 @@ def generate_all_blocks(voxels, threshold=0.1, uniform_size=-1, use_colormap=Fal
     return actors
 
 
-def display(actors, cam_pos, cam_vocal, cam_up, title=None):
+def display(actors, cam_pos, cam_vocal, cam_up, snapshot, title=None):
     """Display the scene from actors.
     cam_pos: list of positions of cameras.
     cam_vocal: vocal point of cameras
     cam_up: view up direction of cameras
     title: display window title
     """
-
     renWin = vtk.vtkRenderWindow()
     window_size = 1024
 
     renderer = vtk.vtkRenderer()
     for actor in actors:
         renderer.AddActor(actor)
-    renderer.SetBackground(1, 1, 1)
+    renderer.SetBackground(0, 0, 0)
     renWin.AddRenderer(renderer)
 
     camera = vtk.vtkCamera()
@@ -136,17 +153,37 @@ def display(actors, cam_pos, cam_vocal, cam_up, title=None):
     style = vtk.vtkInteractorStyleTrackballCamera()
     iren.SetInteractorStyle(style)
     iren.SetRenderWindow(renWin)
+
     if title != None:
         renWin.SetWindowName(title)
+
+    mapper = vtkPolyDataMapper()
+    actor = vtkActor()
+    actor.SetMapper(mapper)
 
     renderer.ResetCameraClippingRange()
     renWin.Render()
 
-    iren.Initialize()
-    iren.Start()
+
+    if snapshot:
+        windowto_image_filter = vtkWindowToImageFilter()
+        windowto_image_filter.SetInput(renWin)
+        windowto_image_filter.SetScale(1)  # image quality
+        windowto_image_filter.SetInputBufferTypeToRGB()
+        # Read from the front buffer.
+        windowto_image_filter.ReadFrontBufferOff()
+        windowto_image_filter.Update()
+
+        writer = vtkJPEGWriter()
+        writer.SetFileName(f"{title}.png")
+        writer.SetInputConnection(windowto_image_filter.GetOutputPort())
+        writer.Write()
+    else:
+        iren.Initialize()
+        iren.Start()
 
 
-def visualisation(voxels, threshold, title=None, uniform_size=-1, use_colormap=False):
+def visualisation(voxels, threshold, title=None, uniform_size=-1, use_colormap=False, snapshot=False):
     """
     Given a voxel matrix, plot all occupied blocks (defined by voxels[x][y][z] > threshold)
     if size_change is set to true, block size will be proportional to voxels[x][y][z]
@@ -160,14 +197,14 @@ def visualisation(voxels, threshold, title=None, uniform_size=-1, use_colormap=F
     )
 
     center = center_of_mass(voxels)
-    dims = voxels.shape
+    # dims = voxels.shape
     distance = voxels.shape[0] * 2.8
     height = voxels.shape[2] * 0.85
-    rad = math.pi * 0.43  # + math.pi
+    rad = math.pi * 3.0  # + math.pi
     cam_pos = [
         center[0] + distance * math.cos(rad),
         center[1] + distance * math.sin(rad),
         center[2] + height,
     ]
 
-    display(actors, cam_pos, center, (0, 0, 1), title=title)
+    display(actors, cam_pos, center, (0, 0, 1), title=title, snapshot=snapshot)

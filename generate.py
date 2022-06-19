@@ -1,3 +1,10 @@
+import torch
+import torch.nn as nn
+from torch.autograd.variable import Variable
+from model import _3DGAN, Generator, Discriminator
+import argparse
+import numpy as np
+import tqdm
 import os
 import os.path
 from visualisation.util import *
@@ -6,21 +13,49 @@ from matplotlib import cm
 import sys
 import scipy.ndimage
 
-if __name__ == "__main__":
-    import argparse
+def get_voxels(voxels):
+    dims = voxels.shape
 
-    cmd_parser = argparse.ArgumentParser(
-        description="""Visualizing .mat voxel file. """
+    if len(dims) == 5:
+        assert dims[1] == 1
+        dims = (dims[0],) + tuple(dims[2:])
+    elif len(dims) == 3:
+        dims = [1] + list(dims)
+    else:
+        assert len(dims) == 4
+
+    result = np.reshape(voxels, dims)
+    return result
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="""Visualizing .mat voxel file. """)
+    parser.add_argument(
+        "-n",
+        "--network",
+        default="models/G_iter_000500.pth",
+        type=str,
+        help="Specify network",
     )
-    cmd_parser.add_argument(
+    parser.add_argument(
+        "-s",
+        "--seed",
+        default=0,
+        type=int,
+        help="Seed",
+    )
+    parser.add_argument(
         "-t",
         "--threshold",
         metavar="threshold",
         type=float,
-        default=0.2,
+        default=0.17,
         help="voxels with confidence lower than the threshold are not displayed",
     )
-    cmd_parser.add_argument(
+    parser.add_argument(
+        "-o", "--out_file", metavar="out_file", type=str, required=True
+    )
+    parser.add_argument(
         "-i",
         "--index",
         metavar="index",
@@ -28,13 +63,7 @@ if __name__ == "__main__":
         default=1,
         help="the index of objects in the inputfile that should be rendered (one based)",
     )
-    cmd_parser.add_argument(
-        "filename",
-        metavar="filename",
-        type=str,
-        help="name of .torch or .mat file to be visualized",
-    )
-    cmd_parser.add_argument(
+    parser.add_argument(
         "-df",
         "--downsample-factor",
         metavar="factor",
@@ -42,7 +71,7 @@ if __name__ == "__main__":
         default=1,
         help="downsample objects via a max pooling of step STEPSIZE for efficiency. Currently supporting STEPSIZE 1, 2, and 4.",
     )
-    cmd_parser.add_argument(
+    parser.add_argument(
         "-dm",
         "--downsample-method",
         metavar="downsample_method",
@@ -50,7 +79,7 @@ if __name__ == "__main__":
         default="max",
         help="downsample method, where mean stands for average pooling and max for max pooling",
     )
-    cmd_parser.add_argument(
+    parser.add_argument(
         "-u",
         "--uniform-size",
         metavar="uniform_size",
@@ -58,14 +87,14 @@ if __name__ == "__main__":
         default=1.0,
         help="set the size of the voxels to BLOCK_SIZE",
     )
-    cmd_parser.add_argument(
+    parser.add_argument(
         "-cm",
         "--colormap",
-        default=cm.get_cmap("BuGn", 8),
+        default=cm.get_cmap("prism", 10),
         action="store_true",
         help="whether to use a colormap to represent voxel occupancy, or to use a uniform color",
     )
-    cmd_parser.add_argument(
+    parser.add_argument(
         "-mc",
         "--max-component",
         metavar="max_component",
@@ -73,9 +102,9 @@ if __name__ == "__main__":
         default=3,
         help="whether to keep only the maximal connected component, where voxels of distance no larger than `DISTANCE` are considered connected. Set to 0 to disable this function.",
     )
+    args = parser.parse_args()
+    print(args)
 
-    args = cmd_parser.parse_args()
-    filename = args.filename
     matname = "instance"
     threshold = args.threshold
     ind = args.index - 1  # matlab use 1 base index
@@ -88,14 +117,20 @@ if __name__ == "__main__":
     assert downsample_method in ("max", "mean")
 
     # read file
-    print("==> Reading input voxel file: " + filename)
-    voxels_raw = read_tensor(filename, matname)
-    print(voxels_raw)
-    print(voxels_raw.shape)
+    print(f"==> Reading from seed: {args.seed}")
+
+    model = Generator()
+    model.load_state_dict(torch.load(args.network))
+    model.eval()
+    model = torch.nn.DataParallel(model, device_ids=[0, 1])
+
+    z = Variable(torch.rand(16, 200, 1, 1, 1))
+    X = model(z)
+    voxels = X.detach().numpy()
     print("Done")
 
+    voxels_raw = get_voxels(voxels)
     voxels = voxels_raw[ind]
-    print(voxels.shape)
 
     # keep only max connected component
     print("Looking for max connected component")
@@ -118,7 +153,8 @@ if __name__ == "__main__":
     visualisation(
         voxels,
         threshold,
-        title=str(ind + 1) + "/" + str(voxels_raw.shape[0]),
+        title=args.out_file,
         uniform_size=uniform_size,
         use_colormap=use_colormap,
+        snapshot=True
     )

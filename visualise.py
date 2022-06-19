@@ -3,6 +3,7 @@ import os.path
 from visualisation.util import *
 from visualisation.util_vtk import visualisation
 import sys
+import scipy.ndimage
 
 if __name__ == "__main__":
     import argparse
@@ -26,12 +27,12 @@ if __name__ == "__main__":
         default=1,
         help="the index of objects in the inputfile that should be rendered (one based)",
     )
-    cmd_parser.add_argument(
-        "filename",
-        metavar="filename",
-        type=str,
-        help="name of .torch or .mat file to be visualized",
-    )
+    # cmd_parser.add_argument(
+    #     "filename",
+    #     metavar="filename",
+    #     type=str,
+    #     help="name of .torch or .mat file to be visualized",
+    # )
     cmd_parser.add_argument(
         "-df",
         "--downsample-factor",
@@ -72,7 +73,7 @@ if __name__ == "__main__":
     )
 
     args = cmd_parser.parse_args()
-    filename = args.filename
+    # filename = args.filename
     matname = "instance"
     threshold = args.threshold
     ind = args.index - 1  # matlab use 1 base index
@@ -84,12 +85,20 @@ if __name__ == "__main__":
 
     assert downsample_method in ("max", "mean")
 
+    filename = "volumetric_data/custom/door_000000261_11.mat"
+
     # read file
     print("==> Reading input voxel file: " + filename)
     voxels_raw = read_tensor(filename, matname)
     print("Done")
 
     voxels = voxels_raw[ind]
+    voxels = ndimage.zoom(voxels, 2.15)
+    duplicate = np.flip(voxels, axis=2)
+    result = np.bitwise_or(voxels, duplicate)
+
+    assert result.shape == (64, 64, 64)
+    voxels = result
 
     # keep only max connected component
     print("Looking for max connected component")

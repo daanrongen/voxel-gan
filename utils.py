@@ -8,8 +8,6 @@ from mpl_toolkits import mplot3d
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-# from torchvision import transforms, utils
-
 
 class Config:
     @property
@@ -74,6 +72,9 @@ class Single(Dataset):
         if self.config.nchw[-1] != 32:
             ratio = self.config.nchw[-1] / 32.0
             voxel = nd.zoom(voxel, (ratio, ratio, ratio), mode="constant", order=0)
+            duplicate = np.flip(voxel, axis=2)
+            voxel = np.bitwise_or(voxel, duplicate)
+        assert voxel.shape == (64, 64, 64)
         return np.expand_dims(voxel.astype(np.float32), 0)
 
     def gen(self):
